@@ -138,6 +138,7 @@ def generate_3pl_report():
     start_date = request.args.get("start_date")
     end_date = request.args.get("end_date")
     filter_by = request.args.get("filter_by", "all")
+    print(f"Generating report from {start_date} to {end_date} for filter: {filter_by}")
 
     data = getData(start_date, end_date, filter_by)
 
