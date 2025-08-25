@@ -60,7 +60,7 @@ def reports_3pl(data):
             driver_name = order.get("pickup_task", {}).get("driver_name", "")
             if not driver_name:
                 continue
-            group = driver_name.split()[-1]
+            group = driver_name.split()[-1].upper()
             groups[group].append(order)
 
         result = {
@@ -141,6 +141,13 @@ def generate_3pl_report():
     print(f"Generating report from {start_date} to {end_date} for filter: {filter_by}")
 
     data = getData(start_date, end_date, filter_by)
+    
+    # Filter by driver category if filter_by is not "all"
+    if filter_by.lower() != "all":
+        data = [
+            order for order in data
+            if order.get("pickup_task", {}).get("driver_name", "").endswith(filter_by)
+        ]
 
     summary = reports_3pl(data)
     return jsonify(summary)
