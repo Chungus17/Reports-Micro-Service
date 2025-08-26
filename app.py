@@ -145,16 +145,15 @@ def generate_3pl_report():
 
     print("filter_by:", filter_by)
 
-    # ✅ If filter_by is not empty and not "all"
-    if filter_by and not ("ALL" in [f.lower() for f in filter_by]):
+    if filter_by and not ("all" in [f.lower() for f in filter_by]):
         data = [
-            order
-            for order in data
+            order for order in data
             if any(
-                order.get("pickup_task", {}).get("driver_name", "").endswith(f)
+                (order.get("pickup_task", {}).get("driver_name") or "").endswith(f)
                 for f in filter_by
             )
         ]
+
 
     summary = reports_3pl(data)
     return jsonify(summary)
