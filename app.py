@@ -149,10 +149,11 @@ def generate_3pl_report():
         data = [
             order for order in data
             if any(
-                (order.get("pickup_task", {}).get("driver_name") or "").endswith(f)
+                (order.get("pickup_task", {}).get("driver_name") or "").split()[-1].upper() == f.upper()
                 for f in filter_by
             )
         ]
+
 
 
     summary = reports_3pl(data)
