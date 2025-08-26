@@ -12,6 +12,7 @@ VERDI_API_KEY = os.environ.get("VERDI_API_KEY")
 
 
 def getData(start_date, end_date, filter_by):
+    print("filter_by in getData:", filter_by)
     apiURL = f"https://tryverdi.com/api/transaction_data?user_id={filter_by}&start_date={start_date}&end_date={end_date}"
     headers = {"Authorization": f"Bearer {VERDI_API_KEY}"}
     response = requests.get(url=apiURL, headers=headers)
