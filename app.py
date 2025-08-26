@@ -141,7 +141,7 @@ def generate_3pl_report():
     filter_by = request.args.getlist("filter_by")  # ✅ get multiple values as list
     print(f"Generating report from {start_date} to {end_date} for filters: {filter_by}")
 
-    data = getData(start_date, end_date, filter_by)
+    data = getData(start_date, end_date, "all")
 
     print("filter_by:", filter_by)
 
