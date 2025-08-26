@@ -132,21 +132,28 @@ def reports_3pl(data):
 
     return summary
 
+
 @app.route("/3pl_report", methods=["GET"])
 def generate_3pl_report():
     # Read query parameters
     start_date = request.args.get("start_date")
     end_date = request.args.get("end_date")
-    filter_by = request.args.get("filter_by", "all")
-    print(f"Generating report from {start_date} to {end_date} for filter: {filter_by}")
+    filter_by = request.args.getlist("filter_by")  # ✅ get multiple values as list
+    print(f"Generating report from {start_date} to {end_date} for filters: {filter_by}")
 
     data = getData(start_date, end_date, filter_by)
-    
-    # Filter by driver category if filter_by is not "all"
-    if filter_by.lower() != "all":
+
+    print("filter_by:", filter_by)
+
+    # ✅ If filter_by is not empty and not "all"
+    if filter_by and not ("all" in [f.lower() for f in filter_by]):
         data = [
-            order for order in data
-            if order.get("pickup_task", {}).get("driver_name", "").endswith(filter_by)
+            order
+            for order in data
+            if any(
+                order.get("pickup_task", {}).get("driver_name", "").endswith(f)
+                for f in filter_by
+            )
         ]
 
     summary = reports_3pl(data)
@@ -155,6 +162,3 @@ def generate_3pl_report():
 
 if __name__ == "__main__":
     app.run(debug=False)
-
-
-
