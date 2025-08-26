@@ -146,14 +146,21 @@ def generate_3pl_report():
 
     print("filter_by:", filter_by)
 
-    if filter_by and not ("ALL" in [f.lower() for f in filter_by]):
+    if filter_by and not ("all" in [f.lower() for f in filter_by]):
         data = [
             order for order in data
             if any(
-                (order.get("pickup_task", {}).get("driver_name") or "").split()[-1].upper() == f.upper()
+                (
+                    (order.get("pickup_task", {}).get("driver_name") or "")
+                    .strip()
+                    .split(" ")[-1].upper()
+                    == f.upper()
+                )
                 for f in filter_by
+                if (order.get("pickup_task", {}).get("driver_name") or "").strip()
             )
         ]
+
 
 
 
