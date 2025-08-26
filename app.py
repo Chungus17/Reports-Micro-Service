@@ -146,7 +146,7 @@ def generate_3pl_report():
     print("filter_by:", filter_by)
 
     # ✅ If filter_by is not empty and not "all"
-    if filter_by and not ("all" in [f.lower() for f in filter_by]):
+    if filter_by and not ("ALL" in [f.lower() for f in filter_by]):
         data = [
             order
             for order in data
