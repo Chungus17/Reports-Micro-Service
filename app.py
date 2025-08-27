@@ -84,40 +84,61 @@ def reports_3pl(data):
 
         return result
 
-    def table_data_rows(data):
-        rows = []
-        for order in data:
-            driver = order.get("pickup_task", {}).get("driver_name", "")
-            amount_str = order.get("amount")
-            created_str = order.get("created_at")
-            successful_str = order.get("delivery_task", {}).get("successful_at")
-            reference = order.get("reference", "")
-            client = order.get("user_name", "")
+    from datetime import datetime
 
+
+from collections import defaultdict
+
+
+def table_data_rows(data):
+    drivers = defaultdict(lambda: {"Amount": 0, "Orders": 0, "Times": []})
+
+    for order in data:
+        driver = order.get("pickup_task", {}).get("driver_name", "")
+        amount_str = order.get("amount")
+        created_str = order.get("created_at")
+        successful_str = order.get("delivery_task", {}).get("successful_at")
+
+        # Parse amount
+        try:
+            amount = round(abs(float(amount_str)), 2)
+        except:
+            amount = 0
+
+        # Parse time taken
+        time_taken = None
+        if created_str and successful_str:
             try:
-                amount = round(abs(float(amount_str)), 2)
+                created = datetime.strptime(created_str, "%Y-%m-%d %H:%M:%S")
+                successful = datetime.strptime(successful_str, "%Y-%m-%d %H:%M:%S")
+                time_taken = round((successful - created).total_seconds() / 60, 2)
             except:
-                amount = 0
+                pass
 
-            time_taken = None
-            if created_str and successful_str:
-                try:
-                    created = datetime.strptime(created_str, "%Y-%m-%d %H:%M:%S")
-                    successful = datetime.strptime(successful_str, "%Y-%m-%d %H:%M:%S")
-                    time_taken = round((successful - created).total_seconds() / 60, 2)
-                except:
-                    time_taken = None
+        # Update driver's stats
+        drivers[driver]["Amount"] += amount
+        drivers[driver]["Orders"] += 1
+        if time_taken is not None:
+            drivers[driver]["Times"].append(time_taken)
 
-            rows.append(
-                {
-                    "Driver": driver,
-                    "Amount": amount,
-                    "Time Taken": time_taken,
-                    "Reference": reference,
-                    "Client": client,
-                }
-            )
-        return rows
+    # Build final rows
+    rows = []
+    for driver, stats in drivers.items():
+        avg_time = (
+            round(sum(stats["Times"]) / len(stats["Times"]), 2)
+            if stats["Times"]
+            else None
+        )
+        rows.append(
+            {
+                "Driver": driver,
+                "Amount": round(stats["Amount"], 2),
+                "Orders": stats["Orders"],
+                "Average Time Taken (min)": avg_time,
+            }
+        )
+
+    return rows
 
     # ---- Build the summary ----
     summary = {
@@ -148,21 +169,20 @@ def generate_3pl_report():
 
     if filter_by and not ("all" in [f.lower() for f in filter_by]):
         data = [
-            order for order in data
+            order
+            for order in data
             if any(
                 (
                     (order.get("pickup_task", {}).get("driver_name") or "")
                     .strip()
-                    .split(" ")[-1].upper()
+                    .split(" ")[-1]
+                    .upper()
                     == f.upper()
                 )
                 for f in filter_by
                 if (order.get("pickup_task", {}).get("driver_name") or "").strip()
             )
         ]
-
-
-
 
     summary = reports_3pl(data)
     return jsonify(summary)
