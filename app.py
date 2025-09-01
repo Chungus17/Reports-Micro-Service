@@ -184,6 +184,7 @@ def generate_3pl_report():
             order for order in data if str(order.get("status", "")).lower() == status
         ]
 
+    print(data)
     summary = reports_3pl(data)
     return jsonify(summary)
 
