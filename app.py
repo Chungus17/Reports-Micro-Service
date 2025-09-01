@@ -155,7 +155,7 @@ def generate_3pl_report():
     start_date = request.args.get("start_date")
     end_date = request.args.get("end_date")
     filter_by = request.args.getlist("filter_by")  # ✅ get multiple values as list
-    print(f"Generating report from {start_date} to {end_date} for filters: {filter_by}")
+    status = request.args.get("status", "all")
 
     data = getData(start_date, end_date, "all")
 
@@ -176,6 +176,12 @@ def generate_3pl_report():
                 for f in filter_by
                 if (order.get("pickup_task", {}).get("driver_name") or "").strip()
             )
+        ]
+
+    # ✅ Filter by status if not ALL
+    if status != "all":
+        data = [
+            order for order in data if str(order.get("status", "")).lower() == status
         ]
 
     summary = reports_3pl(data)
