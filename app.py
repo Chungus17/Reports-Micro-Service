@@ -189,5 +189,53 @@ def generate_3pl_report():
     return jsonify(summary)
 
 
+@app.route("/client_report", methods=["GET"])
+def generate_client_report():
+    # Read query parameters
+    start_date = request.args.get("start_date")
+    end_date = request.args.get("end_date")
+    filter_by = request.args.getlist("filter_by")  # ✅ get multiple values as list
+    status = request.args.get("status", "all")
+    start_time = request.args.get("start_time", "00:00")
+    end_time = request.args.get("end_time", "23:59")
+
+    data = getData(start_date, end_date, "all")
+
+    print("filter_by:", filter_by)
+    print("start_time:", start_time)
+    print("end_time:", end_time)
+    print("status:", status)
+    print("start_date:", start_date)
+    print("end_date:", end_date)
+    
+
+    # if filter_by and not ("all" in [f.lower() for f in filter_by]):
+    #     data = [
+    #         order
+    #         for order in data
+    #         if any(
+    #             (
+    #                 (order.get("pickup_task", {}).get("driver_name") or "")
+    #                 .strip()
+    #                 .split(" ")[-1]
+    #                 .upper()
+    #                 == f.upper()
+    #             )
+    #             for f in filter_by
+    #             if (order.get("pickup_task", {}).get("driver_name") or "").strip()
+    #         )
+    #     ]
+
+    # # ✅ Filter by status if not ALL
+    # if status != "all":
+    #     data = [
+    #         order for order in data if str(order.get("status", "")).lower() == status
+    #     ]
+
+    # print(data)
+    # summary = reports_3pl(data)
+    return jsonify(data)
+
+
 if __name__ == "__main__":
     app.run(debug=False)
