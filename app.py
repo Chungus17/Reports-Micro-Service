@@ -200,13 +200,6 @@ def reports_client(data, start_dt, end_dt):
 
             current_time = next_hour
 
-        # Sort buckets to ensure proper order
-        def sort_key(bucket):
-            start_hour = int(bucket.split("-")[0])
-            return start_hour
-
-        buckets.sort(key=sort_key)
-
         # Count orders into buckets
         bucket_counts = {b: 0 for b in buckets}
         for order in data:
@@ -221,19 +214,23 @@ def reports_client(data, start_dt, end_dt):
             except:
                 continue
 
+        # ✅ Sort the buckets by starting hour
+        sorted_buckets = sorted(bucket_counts.keys(), key=lambda x: int(x.split("-")[0]))
+        sorted_bucket_counts = {b: bucket_counts[b] for b in sorted_buckets}
+
         # Split into 2 charts if number of buckets > 10
-        if len(buckets) > 10:
-            mid = len(buckets) // 2
+        if len(sorted_buckets) > 10:
+            mid = len(sorted_buckets) // 2
             return {
-                f"{buckets[0]} to {buckets[mid-1]}": {
-                    b: bucket_counts[b] for b in buckets[:mid]
+                f"{sorted_buckets[0]} to {sorted_buckets[mid-1]}": {
+                    b: sorted_bucket_counts[b] for b in sorted_buckets[:mid]
                 },
-                f"{buckets[mid]} to {buckets[-1]}": {
-                    b: bucket_counts[b] for b in buckets[mid:]
+                f"{sorted_buckets[mid]} to {sorted_buckets[-1]}": {
+                    b: sorted_bucket_counts[b] for b in sorted_buckets[mid:]
                 },
             }
         else:
-            return {f"{buckets[0]} to {buckets[-1]}": bucket_counts}
+            return {f"{sorted_buckets[0]} to {sorted_buckets[-1]}": sorted_bucket_counts}
 
     def table_data_rows(data):
         clients = defaultdict(lambda: {"Amount": 0, "Orders": 0, "Times": []})
@@ -306,7 +303,6 @@ def reports_client(data, start_dt, end_dt):
     }
 
     return summary
-
 
 @app.route("/client_report", methods=["GET"])
 def generate_client_report():
