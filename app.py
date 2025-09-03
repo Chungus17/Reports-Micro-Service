@@ -176,22 +176,36 @@ def reports_client(data, start_dt, end_dt):
                 continue
         return round(total_minutes / count, 2) if count > 0 else 0
 
-    def charts_per_time_slot(data, start_dt, end_dt):
-        # Build hourly buckets
+    def charts_per_time_slot(data, start_time, end_time):
+        # Build unique hourly buckets based on the time range (not date range)
         buckets = []
-        current = start_dt.replace(minute=0, second=0, microsecond=0)
+        seen_buckets = set()
 
-        # Fixed: Use <= to include the final hour bucket
-        while current <= end_dt:
-            next_hour = current + timedelta(hours=1)
-            # Only add bucket if current hour is within the date range
-            if current < end_dt:
-                buckets.append(f"{current.hour}-{next_hour.hour % 24}")
-            current = next_hour
+        # Create a dummy date to work with time ranges
+        dummy_date = datetime(2024, 1, 1)
+        current_time = datetime.combine(dummy_date.date(), start_time)
+        end_datetime = datetime.combine(dummy_date.date(), end_time)
 
-        # Debug output
-        print(f"DEBUG: Number of buckets created: {len(buckets)}")
-        print(f"DEBUG: Buckets: {buckets}")
+        # Handle overnight time ranges (e.g., 22:00 to 05:00)
+        if end_time < start_time:
+            end_datetime += timedelta(days=1)
+
+        while current_time < end_datetime:
+            next_hour = current_time + timedelta(hours=1)
+            bucket_name = f"{current_time.hour}-{next_hour.hour % 24}"
+
+            if bucket_name not in seen_buckets:
+                buckets.append(bucket_name)
+                seen_buckets.add(bucket_name)
+
+            current_time = next_hour
+
+        # Sort buckets to ensure proper order
+        def sort_key(bucket):
+            start_hour = int(bucket.split("-")[0])
+            return start_hour
+
+        buckets.sort(key=sort_key)
 
         # Count orders into buckets
         bucket_counts = {b: 0 for b in buckets}
@@ -201,21 +215,14 @@ def reports_client(data, start_dt, end_dt):
                 continue
             try:
                 created = datetime.strptime(created_str, "%Y-%m-%d %H:%M:%S")
-                if start_dt <= created <= end_dt:
-                    order_bucket = f"{created.hour}-{(created.hour + 1) % 24}"
-                    if order_bucket in bucket_counts:
-                        bucket_counts[order_bucket] += 1
+                order_bucket = f"{created.hour}-{(created.hour + 1) % 24}"
+                if order_bucket in bucket_counts:
+                    bucket_counts[order_bucket] += 1
             except:
                 continue
 
-        # Debug the condition check
-        print(
-            f"DEBUG: len(buckets) = {len(buckets)}, condition > 10: {len(buckets) > 10}"
-        )
-
         # Split into 2 charts if number of buckets > 10
         if len(buckets) > 10:
-            print("DEBUG: Splitting into 2 charts")
             mid = len(buckets) // 2
             return {
                 f"{buckets[0]} to {buckets[mid-1]}": {
@@ -226,7 +233,6 @@ def reports_client(data, start_dt, end_dt):
                 },
             }
         else:
-            print("DEBUG: Using single chart")
             return {f"{buckets[0]} to {buckets[-1]}": bucket_counts}
 
     def table_data_rows(data):
@@ -285,17 +291,99 @@ def reports_client(data, start_dt, end_dt):
 
         return rows
 
+    # Extract just the time components for chart creation
+    start_time = start_dt.time()
+    end_time = end_dt.time()
+
     # ---- Build the summary ----
     summary = {
         "number_of_orders": count_orders(data),
         "total_fare": total_fare(data),
         "average_fare": average_fare(data),
         "average_delivery_time": average_time_taken(data),
-        "charts": charts_per_time_slot(data, start_dt, end_dt),
+        "charts": charts_per_time_slot(data, start_time, end_time),
         "table": table_data_rows(data),
     }
 
     return summary
+
+
+@app.route("/client_report", methods=["GET"])
+def generate_client_report():
+    # Read query parameters
+    start_date = request.args.get("start_date")  # e.g. "2025-01-01"
+    end_date = request.args.get("end_date")  # e.g. "2025-01-02"
+    filter_by = request.args.getlist("filter_by")  # e.g. ["Admin", "V Thru"] or ["all"]
+    status = request.args.get("status", "all")  # e.g. "success" or "all"
+    start_time = request.args.get("start_time", "00:00")
+    end_time = request.args.get("end_time", "23:59")
+
+    # Parse dates
+    start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
+    end_date_obj = datetime.strptime(end_date, "%Y-%m-%d").date()
+    start_time_obj = datetime.strptime(start_time, "%H:%M").time()
+    end_time_obj = datetime.strptime(end_time, "%H:%M").time()
+
+    # Fetch base data for the entire date range
+    data = getData(start_date, end_date, "all")
+
+    # ✅ NEW: Filter by daily time ranges
+    def is_within_daily_time_range(order_datetime, start_time, end_time):
+        """Check if order time falls within the daily time range."""
+        order_time = order_datetime.time()
+
+        # Handle overnight time ranges (e.g., 22:00 to 05:00)
+        if end_time < start_time:
+            # Overnight: order should be after start_time OR before end_time
+            return order_time >= start_time or order_time <= end_time
+        else:
+            # Same day: order should be between start_time and end_time
+            return start_time <= order_time <= end_time
+
+    # ✅ Filter by date range AND daily time range
+    filtered_data = []
+    for order in data:
+        try:
+            order_datetime = datetime.strptime(order["created_at"], "%Y-%m-%d %H:%M:%S")
+            order_date = order_datetime.date()
+
+            # Check if order is within the date range
+            if start_date_obj <= order_date <= end_date_obj:
+                # Check if order time is within the daily time range
+                if is_within_daily_time_range(
+                    order_datetime, start_time_obj, end_time_obj
+                ):
+                    filtered_data.append(order)
+        except:
+            continue
+
+    # ✅ Normalize filter_by list to lowercase
+    filter_by_lower = [f.lower() for f in filter_by]
+
+    # ✅ Filter by clients (only if not ["all"])
+    if filter_by_lower and not (
+        len(filter_by_lower) == 1 and filter_by_lower[0] == "all"
+    ):
+        filtered_data = [
+            order
+            for order in filtered_data
+            if order.get("user_name", "").lower() in filter_by_lower
+        ]
+
+    # ✅ Filter by status (only if not "all")
+    if status.lower() != "all":
+        filtered_data = [
+            order
+            for order in filtered_data
+            if order.get("status", "").lower() == status.lower()
+        ]
+
+    # Create dummy datetime objects for the reports_client function
+    start_dt = datetime.combine(start_date_obj, start_time_obj)
+    end_dt = datetime.combine(end_date_obj, end_time_obj)
+
+    summary = reports_client(filtered_data, start_dt, end_dt)
+    return jsonify(summary)
 
 
 @app.route("/3pl_report", methods=["GET"])
@@ -335,58 +423,6 @@ def generate_3pl_report():
 
     print(data)
     summary = reports_3pl(data)
-    return jsonify(summary)
-
-
-@app.route("/client_report", methods=["GET"])
-def generate_client_report():
-    # Read query parameters
-    start_date = request.args.get("start_date")  # e.g. "2025-01-01"
-    end_date = request.args.get("end_date")  # e.g. "2025-01-02"
-    filter_by = request.args.getlist("filter_by")  # e.g. ["Admin", "V Thru"] or ["all"]
-    status = request.args.get("status", "all")  # e.g. "success" or "all"
-    start_time = request.args.get("start_time", "00:00")
-    end_time = request.args.get("end_time", "23:59")
-
-    # Fetch base data
-    data = getData(start_date, end_date, "all")
-
-    # Build datetime range
-    start_dt = datetime.strptime(f"{start_date} {start_time}", "%Y-%m-%d %H:%M")
-    end_dt = datetime.strptime(f"{end_date} {end_time}", "%Y-%m-%d %H:%M")
-
-    # ✅ Filter by created_at
-    filtered_data = [
-        order
-        for order in data
-        if start_dt
-        <= datetime.strptime(order["created_at"], "%Y-%m-%d %H:%M:%S")
-        <= end_dt
-    ]
-
-    # ✅ Normalize filter_by list to lowercase
-    filter_by_lower = [f.lower() for f in filter_by]
-
-    # ✅ Filter by clients (only if not ["all"])
-    if filter_by_lower and not (
-        len(filter_by_lower) == 1 and filter_by_lower[0] == "all"
-    ):
-        filtered_data = [
-            order
-            for order in filtered_data
-            if order.get("user_name", "").lower() in filter_by_lower
-        ]
-
-    # ✅ Filter by status (only if not "all")
-    if status.lower() != "all":
-        filtered_data = [
-            order
-            for order in filtered_data
-            if order.get("status", "").lower() == status.lower()
-        ]
-
-    summary = reports_client(filtered_data, start_dt, end_dt)
-    print(summary)
     return jsonify(summary)
 
 
