@@ -182,11 +182,7 @@ def reports_client(data, start_dt, end_dt):
         current = start_dt.replace(minute=0, second=0, microsecond=0)
         while current < end_dt:
             next_hour = current + timedelta(hours=1)
-            if next_hour <= end_dt:
-                buckets.append(f"{current.hour}-{next_hour.hour}")
-            else:
-                # Last partial bucket
-                buckets.append(f"{current.hour}-{end_dt.hour}")
+            buckets.append(f"{current.hour}-{next_hour.hour % 24}")
             current = next_hour
 
         # Count orders into buckets
@@ -198,7 +194,6 @@ def reports_client(data, start_dt, end_dt):
             try:
                 created = datetime.strptime(created_str, "%Y-%m-%d %H:%M:%S")
                 if start_dt <= created <= end_dt:
-                    # Find the bucket
                     order_bucket = f"{created.hour}-{(created.hour + 1) % 24}"
                     if order_bucket in bucket_counts:
                         bucket_counts[order_bucket] += 1
