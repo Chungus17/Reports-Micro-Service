@@ -177,7 +177,7 @@ def reports_client(data, start_dt, end_dt):
         return round(total_minutes / count, 2) if count > 0 else 0
 
     def charts_per_time_slot(data, start_dt, end_dt):
-        # Build the list of buckets (hour ranges) based on time range
+        # Build hourly buckets
         buckets = []
         current = start_dt.replace(minute=0, second=0, microsecond=0)
         while current < end_dt:
@@ -200,8 +200,8 @@ def reports_client(data, start_dt, end_dt):
             except:
                 continue
 
-        # ✅ Split into 2 charts if >= 10 buckets
-        if len(buckets) >= 10:
+        # Split into 2 charts if number of buckets > 10
+        if len(buckets) > 10:
             mid = len(buckets) // 2
             return {
                 f"{buckets[0]} to {buckets[mid-1]}": {
