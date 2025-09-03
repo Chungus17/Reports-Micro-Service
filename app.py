@@ -12,7 +12,6 @@ VERDI_API_KEY = os.environ.get("VERDI_API_KEY")
 
 
 def getData(start_date, end_date, filter_by):
-    print("filter_by in getData:", filter_by)
     apiURL = f"https://tryverdi.com/api/transaction_data?user_id={filter_by}&start_date={start_date}&end_date={end_date}"
     headers = {"Authorization": f"Bearer {VERDI_API_KEY}"}
     response = requests.get(url=apiURL, headers=headers)
@@ -192,49 +191,54 @@ def generate_3pl_report():
 @app.route("/client_report", methods=["GET"])
 def generate_client_report():
     # Read query parameters
-    start_date = request.args.get("start_date")
-    end_date = request.args.get("end_date")
-    filter_by = request.args.getlist("filter_by")  # ✅ get multiple values as list
-    status = request.args.get("status", "all")
+    start_date = request.args.get("start_date")  # e.g. "2025-01-01"
+    end_date = request.args.get("end_date")  # e.g. "2025-01-02"
+    filter_by = request.args.getlist("filter_by")  # e.g. ["Admin", "V Thru"] or ["all"]
+    status = request.args.get("status", "all")  # e.g. "success" or "all"
     start_time = request.args.get("start_time", "00:00")
     end_time = request.args.get("end_time", "23:59")
 
+    # Fetch base data
     data = getData(start_date, end_date, "all")
 
-    print("filter_by:", filter_by)
-    print("start_time:", start_time)
-    print("end_time:", end_time)
-    print("status:", status)
-    print("start_date:", start_date)
-    print("end_date:", end_date)
-    
+    # Build datetime range
+    start_dt = datetime.strptime(f"{start_date} {start_time}", "%Y-%m-%d %H:%M")
+    end_dt = datetime.strptime(f"{end_date} {end_time}", "%Y-%m-%d %H:%M")
 
-    # if filter_by and not ("all" in [f.lower() for f in filter_by]):
-    #     data = [
-    #         order
-    #         for order in data
-    #         if any(
-    #             (
-    #                 (order.get("pickup_task", {}).get("driver_name") or "")
-    #                 .strip()
-    #                 .split(" ")[-1]
-    #                 .upper()
-    #                 == f.upper()
-    #             )
-    #             for f in filter_by
-    #             if (order.get("pickup_task", {}).get("driver_name") or "").strip()
-    #         )
-    #     ]
+    # ✅ Filter by created_at
+    filtered_data = [
+        order
+        for order in data
+        if start_dt
+        <= datetime.strptime(order["created_at"], "%Y-%m-%d %H:%M:%S")
+        <= end_dt
+    ]
 
-    # # ✅ Filter by status if not ALL
-    # if status != "all":
-    #     data = [
-    #         order for order in data if str(order.get("status", "")).lower() == status
-    #     ]
+    # ✅ Normalize filter_by list to lowercase
+    filter_by_lower = [f.lower() for f in filter_by]
 
-    # print(data)
-    # summary = reports_3pl(data)
-    return jsonify(data)
+    # ✅ Filter by clients (only if not ["all"])
+    if filter_by_lower and not (
+        len(filter_by_lower) == 1 and filter_by_lower[0] == "all"
+    ):
+        filtered_data = [
+            order
+            for order in filtered_data
+            if order.get("user_name", "").lower() in filter_by_lower
+        ]
+
+    # ✅ Filter by status (only if not "all")
+    if status.lower() != "all":
+        filtered_data = [
+            order
+            for order in filtered_data
+            if order.get("status", "").lower() == status.lower()
+        ]
+
+    # Debugging
+    print("Filtered Data:", filtered_data)
+
+    return jsonify(filtered_data)
 
 
 if __name__ == "__main__":
