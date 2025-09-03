@@ -148,6 +148,147 @@ def reports_3pl(data):
     return summary
 
 
+def reports_client(data, start_dt, end_dt):
+    def count_orders(data):
+        return len(data)
+
+    def total_fare(data):
+        return round(sum(abs(float(order["amount"])) for order in data), 2)
+
+    def average_fare(data):
+        num_orders = count_orders(data)
+        return round(total_fare(data) / num_orders, 2) if num_orders > 0 else 0
+
+    def average_time_taken(data):
+        total_minutes = 0
+        count = 0
+        for order in data:
+            created_str = order.get("created_at")
+            successful_str = order.get("delivery_task", {}).get("successful_at")
+            if not created_str or not successful_str:
+                continue
+            try:
+                created = datetime.strptime(created_str, "%Y-%m-%d %H:%M:%S")
+                successful = datetime.strptime(successful_str, "%Y-%m-%d %H:%M:%S")
+                total_minutes += (successful - created).total_seconds() / 60
+                count += 1
+            except:
+                continue
+        return round(total_minutes / count, 2) if count > 0 else 0
+
+    def charts_per_time_slot(data, start_dt, end_dt):
+        # Build the list of buckets (hour ranges) based on time range
+        buckets = []
+        current = start_dt.replace(minute=0, second=0, microsecond=0)
+        while current < end_dt:
+            next_hour = current.replace(
+                hour=current.hour + 1 if current.hour < 23 else 0
+            )
+            if next_hour <= end_dt:
+                buckets.append(f"{current.hour}-{current.hour+1}")
+            else:
+                # Last partial bucket
+                buckets.append(f"{current.hour}-{end_dt.hour}")
+            current = next_hour
+
+        # Count orders into buckets
+        bucket_counts = {b: 0 for b in buckets}
+        for order in data:
+            created_str = order.get("created_at")
+            if not created_str:
+                continue
+            try:
+                created = datetime.strptime(created_str, "%Y-%m-%d %H:%M:%S")
+                if start_dt <= created <= end_dt:
+                    bucket = f"{created.hour}-{created.hour+1}"
+                    if bucket in bucket_counts:
+                        bucket_counts[bucket] += 1
+            except:
+                continue
+
+        # ✅ Split into 2 charts if >= 10 buckets
+        if len(buckets) >= 10:
+            mid = len(buckets) // 2
+            return {
+                f"{buckets[0]} to {buckets[mid-1]}": {
+                    b: bucket_counts[b] for b in buckets[:mid]
+                },
+                f"{buckets[mid]} to {buckets[-1]}": {
+                    b: bucket_counts[b] for b in buckets[mid:]
+                },
+            }
+        else:
+            return {f"{buckets[0]} to {buckets[-1]}": bucket_counts}
+
+    def table_data_rows(data):
+        clients = defaultdict(lambda: {"Amount": 0, "Orders": 0, "Times": []})
+
+        for order in data:
+            client = order.get("user_name", "Unknown")
+            amount_str = order.get("amount")
+            created_str = order.get("created_at")
+            successful_str = order.get("delivery_task", {}).get("successful_at")
+
+            # Parse amount
+            try:
+                amount = round(abs(float(amount_str)), 2)
+            except:
+                amount = 0
+
+            # Parse time taken
+            time_taken = None
+            if created_str and successful_str:
+                try:
+                    created = datetime.strptime(created_str, "%Y-%m-%d %H:%M:%S")
+                    successful = datetime.strptime(successful_str, "%Y-%m-%d %H:%M:%S")
+                    time_taken = round((successful - created).total_seconds() / 60, 2)
+                except:
+                    pass
+
+            # Update client stats
+            clients[client]["Amount"] += amount
+            clients[client]["Orders"] += 1
+            if time_taken is not None:
+                clients[client]["Times"].append(time_taken)
+
+        # Build final rows
+        rows = []
+        for client, stats in clients.items():
+            avg_time = (
+                round(sum(stats["Times"]) / len(stats["Times"]), 2)
+                if stats["Times"]
+                else None
+            )
+            avg_fare = (
+                round(stats["Amount"] / stats["Orders"], 2)
+                if stats["Orders"] > 0
+                else 0
+            )
+            rows.append(
+                {
+                    "Client": client,
+                    "Orders": stats["Orders"],
+                    "Total Fare": round(stats["Amount"], 2),
+                    "Average Delivery Time (min)": avg_time,
+                    "Average Fare": avg_fare,
+                }
+            )
+
+        return rows
+
+    # ---- Build the summary ----
+    summary = {
+        "number_of_orders": count_orders(data),
+        "total_fare": total_fare(data),
+        "average_fare": average_fare(data),
+        "average_delivery_time": average_time_taken(data),
+        "charts": charts_per_time_slot(data, start_dt, end_dt),
+        "table": table_data_rows(data),
+    }
+
+    return summary
+
+
 @app.route("/3pl_report", methods=["GET"])
 def generate_3pl_report():
     # Read query parameters
@@ -235,10 +376,9 @@ def generate_client_report():
             if order.get("status", "").lower() == status.lower()
         ]
 
-    # Debugging
-    print("Filtered Data:", filtered_data)
-
-    return jsonify(filtered_data)
+    summary = reports_client(filtered_data, start_dt, end_dt)
+    print(summary)
+    return jsonify(summary)
 
 
 if __name__ == "__main__":
