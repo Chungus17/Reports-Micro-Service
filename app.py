@@ -180,10 +180,18 @@ def reports_client(data, start_dt, end_dt):
         # Build hourly buckets
         buckets = []
         current = start_dt.replace(minute=0, second=0, microsecond=0)
-        while current < end_dt:
+
+        # Fixed: Use <= to include the final hour bucket
+        while current <= end_dt:
             next_hour = current + timedelta(hours=1)
-            buckets.append(f"{current.hour}-{next_hour.hour % 24}")
+            # Only add bucket if current hour is within the date range
+            if current < end_dt:
+                buckets.append(f"{current.hour}-{next_hour.hour % 24}")
             current = next_hour
+
+        # Debug output
+        print(f"DEBUG: Number of buckets created: {len(buckets)}")
+        print(f"DEBUG: Buckets: {buckets}")
 
         # Count orders into buckets
         bucket_counts = {b: 0 for b in buckets}
@@ -200,8 +208,14 @@ def reports_client(data, start_dt, end_dt):
             except:
                 continue
 
+        # Debug the condition check
+        print(
+            f"DEBUG: len(buckets) = {len(buckets)}, condition > 10: {len(buckets) > 10}"
+        )
+
         # Split into 2 charts if number of buckets > 10
         if len(buckets) > 10:
+            print("DEBUG: Splitting into 2 charts")
             mid = len(buckets) // 2
             return {
                 f"{buckets[0]} to {buckets[mid-1]}": {
@@ -212,6 +226,7 @@ def reports_client(data, start_dt, end_dt):
                 },
             }
         else:
+            print("DEBUG: Using single chart")
             return {f"{buckets[0]} to {buckets[-1]}": bucket_counts}
 
     def table_data_rows(data):
