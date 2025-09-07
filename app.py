@@ -215,7 +215,9 @@ def reports_client(data, start_dt, end_dt):
                 continue
 
         # ✅ Sort the buckets by starting hour
-        sorted_buckets = sorted(bucket_counts.keys(), key=lambda x: int(x.split("-")[0]))
+        sorted_buckets = sorted(
+            bucket_counts.keys(), key=lambda x: int(x.split("-")[0])
+        )
         sorted_bucket_counts = {b: bucket_counts[b] for b in sorted_buckets}
 
         # Split into 2 charts if number of buckets > 10
@@ -230,7 +232,9 @@ def reports_client(data, start_dt, end_dt):
                 },
             }
         else:
-            return {f"{sorted_buckets[0]} to {sorted_buckets[-1]}": sorted_bucket_counts}
+            return {
+                f"{sorted_buckets[0]} to {sorted_buckets[-1]}": sorted_bucket_counts
+            }
 
     def table_data_rows(data):
         clients = defaultdict(lambda: {"Amount": 0, "Orders": 0, "Times": []})
@@ -303,6 +307,8 @@ def reports_client(data, start_dt, end_dt):
     }
 
     return summary
+
+
 
 @app.route("/client_report", methods=["GET"])
 def generate_client_report():
@@ -377,6 +383,8 @@ def generate_client_report():
     # Create dummy datetime objects for the reports_client function
     start_dt = datetime.combine(start_date_obj, start_time_obj)
     end_dt = datetime.combine(end_date_obj, end_time_obj)
+
+    print(filtered_data)
 
     summary = reports_client(filtered_data, start_dt, end_dt)
     return jsonify(summary)
