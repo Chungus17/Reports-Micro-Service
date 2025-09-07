@@ -84,13 +84,24 @@ def reports_3pl(data):
         return result
 
     def table_data_rows(data):
-        drivers = defaultdict(lambda: {"Amount": 0, "Orders": 0, "Times": []})
+        drivers = defaultdict(
+            lambda: {
+                "Amount": 0,
+                "Orders": 0,
+                "DeliveryTimes": [],
+                "AssignTimes": [],
+                "PickupWaits": [],
+                "TravelTimes": [],
+                "DropoffWaits": [],
+            }
+        )
+
+        def parse_dt(ts):
+            return datetime.strptime(ts, "%Y-%m-%d %H:%M:%S") if ts else None
 
         for order in data:
-            driver = order.get("pickup_task", {}).get("driver_name", "")
+            driver = order.get("pickup_task", {}).get("driver_name", "Unknown")
             amount_str = order.get("amount")
-            created_str = order.get("created_at")
-            successful_str = order.get("delivery_task", {}).get("successful_at")
 
             # Parse amount
             try:
@@ -98,36 +109,70 @@ def reports_3pl(data):
             except:
                 amount = 0
 
-            # Parse time taken
-            time_taken = None
-            if created_str and successful_str:
-                try:
-                    created = datetime.strptime(created_str, "%Y-%m-%d %H:%M:%S")
-                    successful = datetime.strptime(successful_str, "%Y-%m-%d %H:%M:%S")
-                    time_taken = round((successful - created).total_seconds() / 60, 2)
-                except:
-                    pass
+            # Parse timestamps
+            created = parse_dt(order.get("created_at"))
+            pickup = order.get("pickup_task", {})
+            delivery = order.get("delivery_task", {})
 
-            # Update driver's stats
+            pickup_assigned = parse_dt(pickup.get("assigned_at"))
+            pickup_arrived = parse_dt(pickup.get("arrived_at"))
+            pickup_success = parse_dt(pickup.get("successful_at"))
+
+            delivery_started = parse_dt(delivery.get("started_at"))
+            delivery_arrived = parse_dt(delivery.get("arrived_at"))
+            delivery_success = parse_dt(delivery.get("successful_at"))
+
+            # Delivery time
+            if created and delivery_success:
+                drivers[driver]["DeliveryTimes"].append(
+                    (delivery_success - created).total_seconds() / 60
+                )
+
+            # Time to assign
+            if created and pickup_assigned:
+                drivers[driver]["AssignTimes"].append(
+                    (pickup_assigned - created).total_seconds() / 60
+                )
+
+            # Pickup waiting
+            if pickup_success and pickup_arrived:
+                drivers[driver]["PickupWaits"].append(
+                    (pickup_success - pickup_arrived).total_seconds() / 60
+                )
+
+            # Travel to customer
+            if delivery_arrived and delivery_started:
+                drivers[driver]["TravelTimes"].append(
+                    (delivery_arrived - delivery_started).total_seconds() / 60
+                )
+
+            # Dropoff waiting
+            if delivery_success and delivery_arrived:
+                drivers[driver]["DropoffWaits"].append(
+                    (delivery_success - delivery_arrived).total_seconds() / 60
+                )
+
+            # Update earnings
             drivers[driver]["Amount"] += amount
             drivers[driver]["Orders"] += 1
-            if time_taken is not None:
-                drivers[driver]["Times"].append(time_taken)
 
         # Build final rows
         rows = []
         for driver, stats in drivers.items():
-            avg_time = (
-                round(sum(stats["Times"]) / len(stats["Times"]), 2)
-                if stats["Times"]
-                else None
-            )
+
+            def avg(lst):
+                return round(sum(lst) / len(lst), 2) if lst else None
+
             rows.append(
                 {
                     "Driver": driver,
-                    "Amount": round(stats["Amount"], 2),
                     "Orders": stats["Orders"],
-                    "Average Time Taken (min)": avg_time,
+                    "Amount": round(stats["Amount"], 2),
+                    "Average Delivery Time (min)": avg(stats["DeliveryTimes"]),
+                    "Avg Time to Assign (min)": avg(stats["AssignTimes"]),
+                    "Avg Pickup Waiting (min)": avg(stats["PickupWaits"]),
+                    "Avg Travel to Customer (min)": avg(stats["TravelTimes"]),
+                    "Avg Dropoff Waiting (min)": avg(stats["DropoffWaits"]),
                 }
             )
 
@@ -312,6 +357,7 @@ def reports_client(data, start_dt, end_dt):
         # ---- Build final rows ----
         rows = []
         for client, stats in clients.items():
+
             def avg(lst):
                 return round(sum(lst) / len(lst), 2) if lst else None
 
@@ -358,7 +404,6 @@ def reports_client(data, start_dt, end_dt):
     }
 
     return summary
-
 
 
 @app.route("/client_report", methods=["GET"])
