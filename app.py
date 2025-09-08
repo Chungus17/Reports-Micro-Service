@@ -4,6 +4,7 @@ from flask_cors import CORS
 import requests
 from collections import defaultdict
 from datetime import datetime, timedelta
+import json
 
 app = Flask(__name__)
 CORS(app)
@@ -17,6 +18,39 @@ def getData(start_date, end_date, filter_by):
     response = requests.get(url=apiURL, headers=headers)
     response.raise_for_status()  # raises HTTPError if request failed
     return response.json()
+
+
+def formatAreas(data):
+    # Load JSON data from file
+    with open('areas.json', 'r', encoding='utf-8') as file:
+        areas_data = json.load(file)
+
+    # Build a mapping of each alias → canonical name (first value)
+    area_alias_map = {}
+    for item in areas_data:
+        if 'neighborhoodenglish' in item:
+            aliases = [alias.strip() for alias in item['neighborhoodenglish'].split(',')]
+            if aliases:
+                canonical = aliases[0]  # first alias as canonical
+                for alias in aliases:
+                    area_alias_map[alias.lower()] = canonical
+
+    # Area extraction helper
+    def extract_area_simple(address):
+        if not address:
+            return "Unknown"
+        address_lower = address.lower()
+        for alias in area_alias_map:
+            if alias in address_lower:
+                return area_alias_map[alias]  # canonical name
+        return "Unknown"
+
+    # Loop through data and add "area"
+    for obj in data:
+        pickup_address = obj.get("pickup_task", {}).get("address", "")
+        obj["area"] = extract_area_simple(pickup_address)
+
+    return data
 
 
 def reports_3pl(data):
@@ -480,8 +514,6 @@ def generate_client_report():
     start_dt = datetime.combine(start_date_obj, start_time_obj)
     end_dt = datetime.combine(end_date_obj, end_time_obj)
 
-    print(filtered_data)
-
     summary = reports_client(filtered_data, start_dt, end_dt)
     return jsonify(summary)
 
@@ -524,6 +556,26 @@ def generate_3pl_report():
     print(data)
     summary = reports_3pl(data)
     return jsonify(summary)
+
+
+@app.route("/area-report", methods=["GET"])
+def generate_area_report():
+    start_date = request.args.get("start_date")
+    end_date = request.args.get("end_date")
+    filter_by = request.args.getlist("filter_by")
+    status = request.args.get("status", "all")
+
+    # Fetch base data for the entire date range
+    data = getData(start_date, end_date, "all")
+
+    # ✅ Filter by status if not ALL
+    if status != "all":
+        data = [
+            order for order in data if str(order.get("status", "")).lower() == status
+        ]
+
+    data_with_pickupAreas = formatAreas(data)
+    return jsonify(data_with_pickupAreas)
 
 
 if __name__ == "__main__":
