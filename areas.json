@@ -61,7 +61,7 @@
     },
     {
         "nhood_no": 231,
-        "neighborhoodenglish": "Al Bida'a,albidaa",
+        "neighborhoodenglish": "Al Bida'a,albidaa, 837Q+M2M, bida",
         "centroid_x": 48.088824,
         "centroid_y": 29.31573
     },
@@ -403,7 +403,7 @@
     },
     {
         "nhood_no": 204,
-        "neighborhoodenglish": "Hawalli,Hawally,Al andalus mall,Al Othman Commercial Complex,Promenade mall",
+        "neighborhoodenglish": "Hawalli,Hawally,Al andalus mall,Al Othman Commercial Complex,Promenade mall, Hawali, Hawally",
         "centroid_x": 48.019352,
         "centroid_y": 29.336376
     },
@@ -865,7 +865,7 @@
     },
     {
         "nhood_no": 210,
-        "neighborhoodenglish": "Salwa",
+        "neighborhoodenglish": "Salwa,834C+FJR",
         "centroid_x": 48.07911,
         "centroid_y": 29.29397
     },
