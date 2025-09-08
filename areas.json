@@ -7,7 +7,7 @@
     },
     {
         "nhood_no": 102,
-        "neighborhoodenglish": "Sharq,Alsawaber,KIPCO,Kuwait City,Al Kuwayt, MAZAYA TOWER, Crystal Tower, AL Jaz Tower, AlHamra,Jibla,Al-Salhiya,Salhiya,مدينة الكويت",
+        "neighborhoodenglish": "Sharq,Alsawaber,KIPCO,Kuwait City,Al Kuwayt, MAZAYA TOWER, Crystal Tower, AL Jaz Tower,مدينة, AlHamra,Jibla,Al-Salhiya,Salhiya,مدينة الكويت",
         "centroid_x": 47.986688,
         "centroid_y": 29.381162
     },
@@ -205,7 +205,7 @@
     },
     {
         "nhood_no": 236,
-        "neighborhoodenglish": "Al-Siddiq,siddiq",
+        "neighborhoodenglish": "Al-Siddiq,siddiq,Siddiq",
         "centroid_x": 47.992026,
         "centroid_y": 29.295222
     },
@@ -385,13 +385,13 @@
     },
     {
         "nhood_no": 227,
-        "neighborhoodenglish": "Ferdous",
+        "neighborhoodenglish": "Ferdous, Firdous, firdous",
         "centroid_x": 47.874448,
         "centroid_y": 29.284074
     },
     {
         "nhood_no": 119,
-        "neighborhoodenglish": "Ghornata",
+        "neighborhoodenglish": "Ghornata, Granada",
         "centroid_x": 47.872757,
         "centroid_y": 29.316525
     },
@@ -733,7 +733,7 @@
     },
     {
         "nhood_no": 203,
-        "neighborhoodenglish": "Rawda",
+        "neighborhoodenglish": "Rawda,الروضة,Al Rawda",
         "centroid_x": 47.998944,
         "centroid_y": 29.329362
     },
