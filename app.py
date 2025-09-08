@@ -22,33 +22,40 @@ def getData(start_date, end_date, filter_by):
 
 def formatAreas(data):
     # Load JSON data from file
-    with open('areas.json', 'r', encoding='utf-8') as file:
+    with open("areas.json", "r", encoding="utf-8") as file:
         areas_data = json.load(file)
 
-    # Build a mapping of each alias → canonical name (first value)
+    # Build a mapping of each alias → (canonical name, lat, lon)
     area_alias_map = {}
     for item in areas_data:
-        if 'neighborhoodenglish' in item:
-            aliases = [alias.strip() for alias in item['neighborhoodenglish'].split(',')]
+        if "neighborhoodenglish" in item:
+            aliases = [
+                alias.strip() for alias in item["neighborhoodenglish"].split(",")
+            ]
             if aliases:
                 canonical = aliases[0]  # first alias as canonical
+                lat = item.get("centroid_y")  # latitude
+                lon = item.get("centroid_x")  # longitude
                 for alias in aliases:
-                    area_alias_map[alias.lower()] = canonical
+                    area_alias_map[alias.lower()] = (canonical, lat, lon)
 
     # Area extraction helper
-    def extract_area_simple(address):
+    def extract_area_with_coords(address):
         if not address:
-            return "Unknown"
+            return "Unknown", None, None
         address_lower = address.lower()
-        for alias in area_alias_map:
+        for alias, (canonical, lat, lon) in area_alias_map.items():
             if alias in address_lower:
-                return area_alias_map[alias]  # canonical name
-        return "Unknown"
+                return canonical, lat, lon
+        return "Unknown", None, None
 
-    # Loop through data and add "area"
+    # Loop through data and add "area", "latitude", "longitude"
     for obj in data:
         pickup_address = obj.get("pickup_task", {}).get("address", "")
-        obj["area"] = extract_area_simple(pickup_address)
+        area, lat, lon = extract_area_with_coords(pickup_address)
+        obj["area"] = area
+        obj["latitude"] = lat
+        obj["longitude"] = lon
 
     return data
 
