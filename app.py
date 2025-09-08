@@ -60,6 +60,125 @@ def formatAreas(data):
     return data
 
 
+def reports_area(data):
+    # Helper to parse datetime
+    def parse_dt(ts):
+        return datetime.strptime(ts, "%Y-%m-%d %H:%M:%S") if ts else None
+
+    # Aggregate per area
+    areas = defaultdict(
+        lambda: {
+            "Orders": 0,
+            "Revenue": 0,
+            "DeliveryTimes": [],
+            "AssignTimes": [],
+            "PickupWaits": [],
+            "TravelTimes": [],
+            "DropoffWaits": [],
+        }
+    )
+
+    for order in data:
+        area = order.get("area", "Unknown")
+        try:
+            revenue = round(abs(float(order.get("amount", 0))), 2)
+        except:
+            revenue = 0
+
+        created = parse_dt(order.get("created_at"))
+        pickup = order.get("pickup_task", {})
+        delivery = order.get("delivery_task", {})
+
+        pickup_assigned = parse_dt(pickup.get("assigned_at"))
+        pickup_arrived = parse_dt(pickup.get("arrived_at"))
+        pickup_success = parse_dt(pickup.get("successful_at"))
+
+        delivery_started = parse_dt(delivery.get("started_at"))
+        delivery_arrived = parse_dt(delivery.get("arrived_at"))
+        delivery_success = parse_dt(delivery.get("successful_at"))
+
+        # Aggregate metrics
+        if created and delivery_success:
+            areas[area]["DeliveryTimes"].append(
+                (delivery_success - created).total_seconds() / 60
+            )
+        if created and pickup_assigned:
+            areas[area]["AssignTimes"].append(
+                (pickup_assigned - created).total_seconds() / 60
+            )
+        if pickup_success and pickup_arrived:
+            areas[area]["PickupWaits"].append(
+                (pickup_success - pickup_arrived).total_seconds() / 60
+            )
+        if delivery_arrived and delivery_started:
+            areas[area]["TravelTimes"].append(
+                (delivery_arrived - delivery_started).total_seconds() / 60
+            )
+        if delivery_success and delivery_arrived:
+            areas[area]["DropoffWaits"].append(
+                (delivery_success - delivery_arrived).total_seconds() / 60
+            )
+
+        # Update counts
+        areas[area]["Orders"] += 1
+        areas[area]["Revenue"] += revenue
+
+    # Helper for average
+    def avg(lst):
+        return round(sum(lst) / len(lst), 2) if lst else 0
+
+    # Build statcards
+    total_orders = sum(a["Orders"] for a in areas.values())
+    total_revenue = round(sum(a["Revenue"] for a in areas.values()), 2)
+    avg_fare = round(total_revenue / total_orders, 2) if total_orders else 0
+    avg_delivery_time = (
+        round(sum(sum(a["DeliveryTimes"]) for a in areas.values()) / total_orders, 2)
+        if total_orders
+        else 0
+    )
+
+    statcards = {
+        "number_of_orders": total_orders,
+        "total_revenue": total_revenue,
+        "average_fare": avg_fare,
+        "average_delivery_time": avg_delivery_time,
+    }
+
+    # Build heatmap data (sorted by orders desc)
+    heatmap = sorted(
+        [
+            {"area": area, "orders": a["Orders"], "revenue": a["Revenue"]}
+            for area, a in areas.items()
+        ],
+        key=lambda x: x["orders"],
+        reverse=True,
+    )
+
+    # Build table data (sorted by orders desc)
+    table = sorted(
+        [
+            {
+                "Area": area,
+                "Orders": a["Orders"],
+                "Total Revenue": a["Revenue"],
+                "Average Fare": (
+                    round(a["Revenue"] / a["Orders"], 2) if a["Orders"] else 0
+                ),
+                "Average Delivery Time (min)": avg(a["DeliveryTimes"]),
+                "Avg Time to Assign (min)": avg(a["AssignTimes"]),
+                "Avg Pickup Waiting (min)": avg(a["PickupWaits"]),
+                "Avg Travel to Customer (min)": avg(a["TravelTimes"]),
+                "Avg Dropoff Waiting (min)": avg(a["DropoffWaits"]),
+            }
+            for area, a in areas.items()
+        ],
+        key=lambda x: x["Orders"],
+        reverse=True,
+    )
+
+    return {"statcards": statcards, "heatmap": heatmap, "table": table}
+
+
 def reports_3pl(data):
     def count_orders(data):
         return len(data)
@@ -582,7 +701,8 @@ def generate_area_report():
         ]
 
     data_with_pickupAreas = formatAreas(data)
-    return jsonify(data_with_pickupAreas)
+    final_data = reports_area(data_with_pickupAreas)
+    return jsonify(final_data)
 
 
 if __name__ == "__main__":
