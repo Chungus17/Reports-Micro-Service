@@ -144,10 +144,30 @@ def reports_area(data):
         "average_delivery_time": avg_delivery_time,
     }
 
-    # Build heatmap data (sorted by orders desc)
+    # Build heatmap data (sorted by orders desc) with lat/lon
     heatmap = sorted(
         [
-            {"area": area, "orders": a["Orders"], "revenue": a["Revenue"]}
+            {
+                "area": area,
+                "orders": a["Orders"],
+                "revenue": a["Revenue"],
+                "latitude": next(
+                    (
+                        order.get("latitude")
+                        for order in data
+                        if order.get("area") == area
+                    ),
+                    None,
+                ),
+                "longitude": next(
+                    (
+                        order.get("longitude")
+                        for order in data
+                        if order.get("area") == area
+                    ),
+                    None,
+                ),
+            }
             for area, a in areas.items()
         ],
         key=lambda x: x["orders"],
