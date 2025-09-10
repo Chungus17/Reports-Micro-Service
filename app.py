@@ -586,6 +586,90 @@ def reports_client(data, start_dt, end_dt):
     return summary
 
 
+def reports_transaction_history(data):
+    def parse_dt(ts):
+        return datetime.strptime(ts, "%Y-%m-%d %H:%M:%S") if ts else None
+
+    def minutes_diff(start, end):
+        return round((end - start).total_seconds() / 60, 2) if start and end else None
+
+    # --- Summary helpers ---
+    def count_orders(data):
+        return len(data)
+
+    def total_fare(data):
+        return round(sum(abs(float(order["amount"])) for order in data), 2)
+
+    def average_fare(data):
+        num_orders = count_orders(data)
+        return round(total_fare(data) / num_orders, 2) if num_orders > 0 else 0
+
+    def average_delivery_time(data):
+        total_minutes = 0
+        count = 0
+        for order in data:
+            created = parse_dt(order.get("created_at"))
+            successful = parse_dt(order.get("delivery_task", {}).get("successful_at"))
+            if created and successful:
+                total_minutes += (successful - created).total_seconds() / 60
+                count += 1
+        return round(total_minutes / count, 2) if count > 0 else 0
+
+    # --- Table rows ---
+    rows = []
+    for order in data:
+        pickup = order.get("pickup_task", {})
+        delivery = order.get("delivery_task", {})
+
+        # Parse timestamps
+        created = parse_dt(order.get("created_at"))
+        pickup_assigned = parse_dt(pickup.get("assigned_at"))
+        pickup_arrived = parse_dt(pickup.get("arrived_at"))
+        pickup_success = parse_dt(pickup.get("successful_at"))
+        delivery_started = parse_dt(delivery.get("started_at"))
+        delivery_arrived = parse_dt(delivery.get("arrived_at"))
+        delivery_success = parse_dt(delivery.get("successful_at"))
+
+        # Calculate times
+        delivery_time = minutes_diff(created, delivery_success)  # Full cycle
+        assign_time = minutes_diff(created, pickup_assigned)  # Order → assigned
+        pickup_wait = minutes_diff(
+            pickup_arrived, pickup_success
+        )  # Driver waiting at pickup
+        travel_time = minutes_diff(
+            delivery_started, delivery_arrived
+        )  # Pickup → arrival at delivery
+        dropoff_wait = minutes_diff(
+            delivery_arrived, delivery_success
+        )  # Arrival → successful dropoff
+
+        rows.append(
+            {
+                "pickup_name": order.get("user_name"),
+                "driver_name": pickup.get("driver_name"),
+                "amount": abs(float(order.get("amount", 0))),
+                "order_id": order.get("reference"),
+                "pickup_address": pickup.get("address"),
+                "delivery_address": delivery.get("address"),
+                "created_at": order.get("created_at"),
+                "delivery_time_min": delivery_time,
+                "assign_time_min": assign_time,
+                "pickup_wait_min": pickup_wait,
+                "travel_time_min": travel_time,
+                "dropoff_wait_min": dropoff_wait,
+            }
+        )
+
+    # --- Final return ---
+    return {
+        "number_of_orders": count_orders(data),
+        "total_fare": total_fare(data),
+        "average_fare": average_fare(data),
+        "average_delivery_time": average_delivery_time(data),
+        "table": rows,  # ✅ each row = one order
+    }
+
+
 @app.route("/client_report", methods=["GET"])
 def generate_client_report():
     # Read query parameters
@@ -722,6 +806,34 @@ def generate_area_report():
 
     data_with_pickupAreas = formatAreas(data)
     final_data = reports_area(data_with_pickupAreas)
+    return jsonify(final_data)
+
+
+@app.route("/transaction_history_report", methods=["GET"])
+def generate_transaction_history_report():
+    start_date = request.args.get("start_date")
+    end_date = request.args.get("end_date")
+    filter_by = request.args.getlist("filter_by")
+    status = request.args.get("status", "all")
+
+    # Fetch base data for the entire date range
+    data = getData(start_date, end_date, "all")
+
+    # ✅ Filter by clients (only if not ["all"])
+    if filter_by and not ("all" in [f.lower() for f in filter_by]):
+        data = [
+            order
+            for order in data
+            if order.get("user_name", "").lower() in [f.lower() for f in filter_by]
+        ]
+
+    # ✅ Filter by status if not ALL
+    if status != "all":
+        data = [
+            order for order in data if str(order.get("status", "")).lower() == status
+        ]
+    
+    final_data = reports_transaction_history(data)
     return jsonify(final_data)
 
 
