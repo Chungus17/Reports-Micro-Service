@@ -649,6 +649,7 @@ def reports_transaction_history(data):
                 "driver_name": pickup.get("driver_name"),
                 "amount": abs(float(order.get("amount", 0))),
                 "order_id": order.get("reference"),
+                "status": order.get("status"),
                 "pickup_address": pickup.get("address"),
                 "delivery_address": delivery.get("address"),
                 "created_at": order.get("created_at"),
